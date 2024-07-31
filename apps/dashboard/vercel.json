@@ -1,0 +1,6 @@
+{
+  "builds": [
+    { "src": "apps/dashboard/next.config.js", "use": "@vercel/next" }
+  ],
+  "outputDirectory": ".next"
+}
