@@ -1,112 +1,49 @@
-const path = require('path');
-const os = require('os');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const withBundleAnalyzer = require('@next/bundle-analyzer')({
-  enabled: process.env.ANALYZE === 'true',
-});
-
-const pkg = require('../../package.json');
-
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  output: 'standalone',
-  publicRuntimeConfig: {
-    version: pkg.version,
-  },
-  transpilePackages: [
-    '@chaindesk/lib',
-    '@chaindesk/emails',
-    '@chaindesk/ui',
-    '@chaindesk/integrations',
-  ],
-  experimental: {
-    outputFileTracingRoot: path.join(__dirname, '../../'),
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
-    ],
-  },
-  webpack: (config, { isServer }) => {
-    config.externals.push({
-      canvas: 'commonjs canvas',
-      'pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js': true,
-      '@huggingface/inference': 'commonjs @huggingface/inference',
-      replicate: 'commonjs replicate',
-      'cohere-ai': 'commonjs cohere-ai',
-      typeorm: 'commonjs typeorm',
-      'd3-dsv': 'commonjs d3-dsv',
-      'srt-parser-2': 'commonjs srt-parser-2',
-      puppeteer: 'commonjs puppeteer',
-      epub2: 'commonjs epub2',
-      playwright: 'commonjs playwright',
-      bullmq: 'commonjs bullmq',
-    });
-
-    config.plugins.push(
-      new CopyWebpackPlugin({
-        patterns: [
-          {
-            from: '../../packages/ui/src/**/static/**',
-            globOptions: {
-              ignore: ['**/ui/node_modules'],
-            },
-            to({ context, absoluteFilename }) {
-              const appName = /ui\/src\/static\/(.*)\//.exec(absoluteFilename);
-              return `${context}/public/shared/${appName[1]}/[name][ext]`;
-            },
-          },
-          {
-            from: '../../packages/integrations/**/static/**',
-            globOptions: {
-              ignore: ['**/integrations/node_modules'],
-            },
-            to({ context, absoluteFilename }) {
-              const appName = /integrations\/(.*)\/static/.exec(absoluteFilename);
-              return `${context}/public/integrations/${appName[1]}/[name][ext]`;
-            },
-          },
-        ],
-      })
-    );
-
-    if (isServer) {
-      config.entry = async () => {
-        const entries = await config.entry();
-        return {
-          ...entries,
-          'datasource-loader': path.resolve(process.cwd(), 'workers/datasource-loader.ts'),
-          'daily-leads': path.resolve(process.cwd(), 'cron/daily-leads.tsx'),
-        };
-      };
-    }
-
-    return config;
-  },
-};
-
-module.exports = withBundleAnalyzer(nextConfig);
-
-if (process.env.SENTRY_ORGANIZATION) {
-  const { withSentryConfig } = require('@sentry/nextjs');
-
-  module.exports = withSentryConfig(
-    module.exports,
-    {
-      silent: true,
-      org: process.env.SENTRY_ORGANIZATION,
-      project: 'javascript-nextjs',
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDotEnv": [".env.local"],
+  "pipeline": {
+    "prisma:generate": {
+      "cache": false
     },
-    {
-      widenClientFileUpload: true,
-      transpileClientSDK: true,
-      tunnelRoute: '/monitoring',
-      hideSourceMaps: true,
-      disableLogger: true,
+    "prisma:push": {
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["^build", "@chaindesk/prisma#prisma:generate"],
+      "outputs": ["apps/dashboard/.next/**", "!apps/dashboard/.next/cache/**", "dist/**"],
+      "outputMode": "new-only"
+    },
+    "dev": {
+      "dotEnv": [".env.local"],
+      "dependsOn": [
+        "^dev",
+        "@chaindesk/prisma#prisma:generate",
+        "@chaindesk/prisma#prisma:push"
+      ],
+      "cache": false
+    },
+    "lint": {},
+    "typecheck": {},
+    "check": {},
+    "sendDailyLeads": {
+      "dependsOn": ["@chaindesk/prisma#prisma:generate"],
+      "cache": false
+    },
+    "syncDatasources": {
+      "dependsOn": ["@chaindesk/prisma#prisma:generate"],
+      "cache": false
+    },
+    "sendWeeklyAdminStats": {
+      "dependsOn": ["@chaindesk/prisma#prisma:generate"],
+      "cache": false
+    },
+    "sendAccountCleaningWarning": {
+      "dependsOn": ["@chaindesk/prisma#prisma:generate"],
+      "cache": false
+    },
+    "aiNewsLoad": {
+      "dependsOn": ["@chaindesk/prisma#prisma:generate"],
+      "cache": false
     }
-  );
+  }
 }
